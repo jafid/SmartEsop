@@ -1,0 +1,8 @@
+{
+  "name": "smart-employee-stock-option-plan",
+  "version": "1.0.0",
+  "description": "My NFT project",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.2.0"
+  }
+}
