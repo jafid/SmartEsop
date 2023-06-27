@@ -2,7 +2,7 @@
 
 This repository contains the smart contract implementation for an Employee Stock Option Plan (ESOP). The ESOP contract allows companies to grant, vest, and exercise stock options for their employees.
 
-For detailed information on the contract architecture, functions, and usage, please refer to the Documentation.
+For detailed information on the contract architecture, functions, and usage, security considerations, gas and economy optimization, and adherence to ERC20 standards.  please refer to the Documentation.
 
 ## Prerequisites
 Solidity compiler
