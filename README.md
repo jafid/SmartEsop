@@ -1,45 +1,32 @@
-# Employee Stock Option Plan
+# Employee Stock Option Plan (ESOP) Contract
 
-+ This smart contract allows a company to grant stock options to its employees and manage the vesting and exercising of those options. It ensures transparency and automates the process, providing a secure and efficient way to handle employee stock options.
+This repository contains the smart contract implementation for an Employee Stock Option Plan (ESOP). The ESOP contract allows companies to grant, vest, and exercise stock options for their employees.
 
-## Features
+For detailed information on the contract architecture, functions, and usage, please refer to the Documentation.
 
-* Granting Stock Options: The company can grant a specific number of stock options to an employee.
-* Setting Vesting Schedule: The company can set a vesting schedule for the granted options, specifying the period over which the options will vest.
-* Exercising Options: Once options have vested, an employee can exercise their vested options and receive the corresponding tokens.
-* Tracking Vested and Exercised Options: The contract keeps track of the vested and exercised options for each employee.
-* SafeMath Library: The contract uses the SafeMath library to prevent mathematical errors and vulnerabilities.
+## Prerequisites
+Solidity compiler
+Ethereum development environment
 
-## How to Use
+## Contract Overview
+The ESOP contract manages the granting, vesting, and exercising of stock options. It provides the following functionality:
 
-1. Compile and Deploy:
-+ The smart contract can be compiled, run, and deployed on Remix Ethereum IDE JavaScript VM.
-+ This ensures that the contract is tested in a simulated Ethereum environment before being deployed to the actual network.
++ Granting stock options to employees
++ Setting vesting schedules for employees
++ Exercising vested options
++ Calculating vested options based on the vesting schedule
++ Transferring tokens to recipients
 
-2. Grant Stock Options:
-+ The company can grant stock options to an employee by calling the grantStockOptions function and specifying the employee's address and the number of options.
-+ The contract checks if enough options are available and updates the total options count accordingly.
+## Usage
+1. Deploy the ESOP contract on the Ethereum blockchain Remix IDE.
+2. Grant stock options to employees using the grantStockOptions function.
+3. Set the vesting schedule for employees using the setVestingSchedule function.
+4. Employees can exercise their vested options using the exerciseOptions function.
+5. Vested options can be calculated for an employee using the calculateVestedOptions function.
+6. The vestOptions function can be called periodically to vest options for eligible employees.
+7. Tokens can be transferred from the ESOP contract to recipients using the transferTokens function.
 
-3. Set Vesting Schedule:
-+ After granting options, the company can set a vesting schedule for the employee by calling the setVestingSchedule function.
-+ The vesting period and cliff period (a period after which the options start vesting) are specified.
-+ The contract ensures that the vesting schedule has not already been set and updates the grant information.
+For detailed instructions and examples, please refer to the Documentation.
 
-4. Exercise Options:
-+ Once options have vested, an employee can exercise their vested options by calling the exerciseOptions function and specifying the number of options to exercise.
-+ The contract verifies that the employee has enough vested options and transfers the corresponding tokens to the employee's address.
-
-5. Track Vested and Exercised Options:
-+ The contract automatically tracks the number of vested and exercised options for each employee.
-+ The calculateVestedOptions function allows anyone to check the number of vested options for a specific employee.
-
-6. Security and Safety:
-+ The contract uses the SafeMath library to prevent common mathematical errors and vulnerabilities in smart contracts.
-
-
-## Additional Information
-
-- The smart contract source code is available on GitHub.
-- The contract has been compiled, run, and deployed on Remix Ethereum IDE - - - JavaScript VM to ensure its functionality and compatibility.
-
-Please note that this layman documentation provides a simplified overview of the smart contract. For detailed technical information and a deeper understanding of the contract's functionalities, it is recommended to review the contract's source code and documentation.
+## License
+This project is licensed under the MIT License.
