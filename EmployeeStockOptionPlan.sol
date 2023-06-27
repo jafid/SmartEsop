@@ -1,167 +1,207 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
 
-// Importing necessary libraries and contracts
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-
-
+/**
+ * @title Employee Stock Option Plan Contract
+ * @dev This contract manages the granting, vesting, and exercising of stock options for employees.
+ *      It allows the company to grant stock options to employees, set vesting schedules, exercise options,
+ *      calculate vested options, vest options for eligible employees, and transfer tokens to recipients.
+ *      The contract ensures that options are granted and exercised within the specified rules and tracks
+ *      the total number of available options and vested options. It also prevents reentrant calls.
+ */
 
 contract EmployeeStockOptionPlan {
-    using SafeMath for uint256;     // Using SafeMath library for safe mathematical operations
- 
-    // Define the necessary data structures and variables
-
-    // Structure to hold information about an employee's granted options    
-        struct GrantOption {
-        uint256 options;            // Number of options granted
-        uint256 vestingPeriod;      // Period over which the options vest
-        uint256 cliffPeriod;        // Period after which the options start vesting
-        uint256 startTime;          // Time when the vesting starts
-        uint256 vestedOptions;      // Number of options that have vested
-        bool exercised;             // Flag indicating if the options have been exercised
+    struct GrantOption {
+        uint256 options;         // Total number of options granted
+        uint256 vestingPeriod;   // Duration of the vesting period (in blocks)
+        uint256 cliffPeriod;     // Duration of the cliff period (in blocks)
+        uint256 startBlock;      // Block number when the vesting period starts
+        uint256 vestedOptions;   // Number of options vested
+        bool exercised;          // Flag indicating whether options have been exercised
     }
 
-        address public company;         // Address of the company
-        IERC20 public token;            // Contract for the token used for stock options
-        uint256 public totalOptions;    // Total number of available options
-        uint256 public totalVested;     // Total number of vested options
+    address public company;           // Address of the company
+    ERC20 public token;               // Token contract used for granting options
+    uint256 public totalOptions;      // Total number of available options
+    uint256 public totalVested;       // Total number of vested options
+    address[] public employeeList;    // List of employees
+    mapping(address => GrantOption) public employeeGrants; // Mapping of employee grants
 
-    mapping(address => GrantOption) public grants;   // Mapping to store grants for each employee
-
-    
-    // Implement the necessary events
-
-     // Event emitted when stock options are granted to an employee
     event OptionsGranted(address indexed employee, uint256 options);
-
-     // Event emitted when stock options vest for an employee
-    event OptionsVested(address indexed employee, uint256 options);
-
-     // Event emitted when stock options are exercised by an employee
+    event OptionsVested(address indexed employee, uint256 options, uint256 vestedOptions);
     event OptionsExercised(address indexed employee, uint256 options);
+    event TokensTransferred(address indexed from, address indexed to, uint256 value);
 
-    // Implement the constructor
-    constructor(IERC20 _token, uint256 _totalOptions) {
+    constructor(address _tokenAddress) {
+        token = ERC20(_tokenAddress);
+        totalOptions = 1000;
         company = msg.sender;
-        token = _token;
-        totalOptions = _totalOptions;
     }
 
-
-    // Implement the functions for granting stock options
-
-    // Function to grant stock options to an employee
+    /**
+     * @dev Grant stock options to an employee.
+     * @param employee The address of the employee.
+     * @param options The number of options to grant.
+     */
     function grantStockOptions(address employee, uint256 options) external onlyCompany {
         require(totalOptions >= options, "Not enough options available for granting");
+        require(employee != address(0), "Invalid employee address");
 
-        totalOptions = totalOptions.sub(options);
+        totalOptions -= options;
 
-        grants[employee] = GrantOption({
+        employeeGrants[employee] = GrantOption({
             options: options,
             vestingPeriod: 0,
             cliffPeriod: 0,
-            startTime: 0,
+            startBlock: 0,
             vestedOptions: 0,
             exercised: false
         });
 
+        employeeList.push(employee);
+
         emit OptionsGranted(employee, options);
     }
 
-    
-    // Implement the functions for setting the vesting schedule
-
-    // Function to set the vesting schedule for an employee's granted options
+    /**
+     * @dev Set the vesting schedule for an employee.
+     * @param employee The address of the employee.
+     * @param vestingPeriod The duration of the vesting period (in blocks).
+     * @param cliffPeriod The duration of the cliff period (in blocks).
+     */
     function setVestingSchedule(address employee, uint256 vestingPeriod, uint256 cliffPeriod) external onlyCompany {
-        GrantOption storage grant = grants[employee];
-        require(grant.options > 0, "No grant found for the employee");
-        require(grant.startTime == 0, "Vesting schedule has already been set");
+        require(employee != address(0), "Invalid employee address");
+
+        GrantOption storage grant = employeeGrants[employee];
+        require(grant.options > 0 && grant.startBlock == 0, "No grant found for the employee or vesting schedule already set");
 
         grant.vestingPeriod = vestingPeriod;
         grant.cliffPeriod = cliffPeriod;
-        grant.startTime = block.timestamp;
+        grant.startBlock = block.number;
 
-        emit OptionsVested(employee, 0); // Emit a zero-vesting event to mark the start of the vesting schedule
+        emit OptionsVested(employee, 0, 0);
     }
 
-    
-    // Implement the functions for exercising options
-
-     // Function for an employee to exercise their vested options
-    function exerciseOptions(uint256 options) external {
-        GrantOption storage grant = grants[msg.sender];
-        require(grant.options > 0, "No grant found for the employee");
-        require(!grant.exercised, "Options have already been exercised");
+    /**
+     * @dev Exercise vested options.
+     * @param options The number of options to exercise.
+     */
+    function exerciseOptions(uint256 options) external nonReentrant {
         require(options > 0, "Number of options must be greater than zero");
 
-        uint256 vestedOptions = calculateVestedOptions(msg.sender).sub(grant.vestedOptions);
+        GrantOption storage grant = employeeGrants[msg.sender];
+        require(grant.options > 0 && !grant.exercised, "No grant found for the employee or options already exercised");
+
+        uint256 vestedOptions = calculateVestedOptions(msg.sender) - grant.vestedOptions;
         require(options <= vestedOptions, "Not enough vested options");
 
         grant.exercised = true;
-        grant.vestedOptions = grant.vestedOptions.add(options);
-
-        token.transfer(msg.sender, options);
+        grant.vestedOptions += options;
 
         emit OptionsExercised(msg.sender, options);
     }
 
-    
-    // Implement the functions for tracking vested and exercised options
-
-    // Function to calculate the number of vested options for an employee
+    /**
+     * @dev Calculate the number of vested options for an employee.
+     * @param employee The address of the employee.
+     * @return The number of vested options.
+     */
     function calculateVestedOptions(address employee) public view returns (uint256) {
-       GrantOption storage grant = grants[employee];
+        GrantOption storage grant = employeeGrants[employee];
 
-        if (grant.startTime == 0) {
-            return 0; // Vesting schedule not set
-        }
-
-        if (block.timestamp < grant.startTime.add(grant.cliffPeriod)) {
-            return 0; // Cliff period ongoing, no vested options yet
+        if (grant.startBlock == 0 || block.number < grant.startBlock + grant.cliffPeriod) {
+            return 0;
         }
 
         if (grant.vestingPeriod == 0) {
-            return grant.options; // Vesting period is zero, all options are immediately vested
+            return grant.options;
         }
 
-        uint256 elapsedTime = block.timestamp.sub(grant.startTime).sub(grant.cliffPeriod);
+        uint256 elapsedTime = block.number - grant.startBlock - grant.cliffPeriod;
         uint256 totalVestingPeriod = grant.vestingPeriod;
 
         if (elapsedTime >= totalVestingPeriod) {
-            return grant.options; // Fully vested
+            return grant.options;
         }
 
-        uint256 vestedOptions = grant.options.mul(elapsedTime).div(totalVestingPeriod);
+        uint256 vestedOptions = (grant.options * elapsedTime) / totalVestingPeriod;
 
         return vestedOptions;
     }
 
-    // Function to manually vest options for an employee
-    function vestOptions(address employee) external onlyCompany {
-        GrantOption storage grant = grants[employee];
-        require(grant.options > 0, "No grant found for the employee");
-        require(!grant.exercised, "Options have already been exercised");
+    /**
+     * @dev Vest options for all eligible employees.
+     */
+    function vestOptions() external onlyCompany {
+        uint256 totalVestedOptions;
+        uint256 employeeCount = employeeList.length;
 
-        uint256 vestedOptions = calculateVestedOptions(employee).sub(grant.vestedOptions);
-        require(vestedOptions > 0, "No vested options available");
+        for (uint256 i = 0; i < employeeCount; i++) {
+            address employee = employeeList[i];
+            GrantOption storage grant = employeeGrants[employee];
 
-        grant.vestedOptions = grant.vestedOptions.add(vestedOptions);
-        totalVested = totalVested.add(vestedOptions);
+            if (grant.options > 0 && !grant.exercised) {
+                uint256 vestedOptions = calculateVestedOptions(employee) - grant.vestedOptions;
+                if (vestedOptions > 0) {
+                    grant.vestedOptions += vestedOptions;
+                    totalVestedOptions += vestedOptions;
+                    emit OptionsVested(employee, vestedOptions, grant.vestedOptions);
+                }
+            }
+        }
 
-        emit OptionsVested(employee, vestedOptions);
+        totalVested += totalVestedOptions;
     }
 
-    
-    // Implement the necessary modifiers and access control
+    /**
+     * @dev Transfer tokens from the contract to a recipient.
+     * @param to The address of the recipient.
+     * @param value The amount of tokens to transfer.
+     */
+    function transferTokens(address to, uint256 value) external onlyCompany {
+        require(to != address(0), "Invalid recipient address");
+        require(value <= token.balanceOf(address(this)), "Insufficient token balance");
 
-    // Modifier to restrict access to only the company
-        modifier onlyCompany() {
+        token.transfer(to, value);
+
+        emit TokensTransferred(address(this), to, value);
+    }
+
+    modifier onlyCompany() {
         require(msg.sender == company, "Only the company can call this function");
         _;
     }
 
-    
-    // Add any additional functions or modifiers as needed
+    bool private inTransaction;
+
+    modifier nonReentrant() {
+        require(!inTransaction, "Reentrant call");
+        inTransaction = true;
+        _;
+        inTransaction = false;
+    }
+}
+
+// ERC20 token contract interface
+contract ERC20 {
+    mapping(address => uint256) balances;
+    uint256 totalSupply_;
+
+    function totalSupply() external view returns (uint256) {
+        return totalSupply_;
+    }
+
+    function balanceOf(address account) external view returns (uint256) {
+        return balances[account];
+    }
+
+    function transfer(address to, uint256 value) external returns (bool) {
+        require(to != address(0), "Invalid recipient address");
+        require(value <= balances[msg.sender], "Insufficient balance");
+
+        balances[msg.sender] -= value;
+        balances[to] += value;
+
+        return true;
+    }
 }
