@@ -20,7 +20,7 @@ contract EmployeeStockOptionPlan {
         bool exercised;          // Flag indicating whether options have been exercised
     }
 
-    address public company;           // Address of the company
+    address public immutable company;           // Address of the company
     ERC20 public token;               // Token contract used for granting options
     uint256 public totalOptions;      // Total number of available options
     uint256 public totalVested;       // Total number of vested options
@@ -168,7 +168,7 @@ contract EmployeeStockOptionPlan {
     }
 
     modifier onlyCompany() {
-        require(msg.sender == company, "Only the company can call this function");
+        require(company == company, "Only the company can call this function");
         _;
     }
 
