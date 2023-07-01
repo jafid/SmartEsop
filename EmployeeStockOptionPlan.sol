@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
 /**
  * @title Employee Stock Option Plan Contract
  * @dev This contract manages the granting, vesting, and exercising of stock options for employees.
@@ -9,8 +11,7 @@ pragma solidity ^0.8.0;
  *      The contract ensures that options are granted and exercised within the specified rules and tracks
  *      the total number of available options and vested options. It also prevents reentrant calls.
  */
-
-contract EmployeeStockOptionPlan {
+contract EmployeeStockOptionPlan is ERC721 {
     struct GrantOption {
         uint256 options;         // Total number of options granted
         uint256 vestingPeriod;   // Duration of the vesting period (in blocks)
@@ -21,21 +22,20 @@ contract EmployeeStockOptionPlan {
     }
 
     address public immutable company;           // Address of the company
-    ERC20 public token;               // Token contract used for granting options
     uint256 public totalOptions;      // Total number of available options
     uint256 public totalVested;       // Total number of vested options
+    uint256 private totalTokens;      // Total number of ERC721 tokens minted
     address[] public employeeList;    // List of employees
     mapping(address => GrantOption) public employeeGrants; // Mapping of employee grants
 
     event OptionsGranted(address indexed employee, uint256 options);
     event OptionsVested(address indexed employee, uint256 options, uint256 vestedOptions);
     event OptionsExercised(address indexed employee, uint256 options);
-    event TokensTransferred(address indexed from, address indexed to, uint256 value);
 
-    constructor(address _tokenAddress) {
-        token = ERC20(_tokenAddress);
+    constructor() ERC721("EmployeeStockOptions", "ESO") {
         totalOptions = 1000;
         company = msg.sender;
+        totalTokens = 0;
     }
 
     /**
@@ -59,6 +59,10 @@ contract EmployeeStockOptionPlan {
         });
 
         employeeList.push(employee);
+
+        uint256 tokenId = totalTokens + 1;
+        totalTokens = tokenId;
+        _safeMint(employee, tokenId);
 
         emit OptionsGranted(employee, options);
     }
@@ -153,22 +157,8 @@ contract EmployeeStockOptionPlan {
         totalVested += totalVestedOptions;
     }
 
-    /**
-     * @dev Transfer tokens from the contract to a recipient.
-     * @param to The address of the recipient.
-     * @param value The amount of tokens to transfer.
-     */
-    function transferTokens(address to, uint256 value) external onlyCompany {
-        require(to != address(0), "Invalid recipient address");
-        require(value <= token.balanceOf(address(this)), "Insufficient token balance");
-
-        token.transfer(to, value);
-
-        emit TokensTransferred(address(this), to, value);
-    }
-
     modifier onlyCompany() {
-        require(company == company, "Only the company can call this function");
+        require(msg.sender == company, "Only the company can call this function");
         _;
     }
 
@@ -179,29 +169,5 @@ contract EmployeeStockOptionPlan {
         inTransaction = true;
         _;
         inTransaction = false;
-    }
-}
-
-// ERC20 token contract interface
-contract ERC20 {
-    mapping(address => uint256) balances;
-    uint256 totalSupply_;
-
-    function totalSupply() external view returns (uint256) {
-        return totalSupply_;
-    }
-
-    function balanceOf(address account) external view returns (uint256) {
-        return balances[account];
-    }
-
-    function transfer(address to, uint256 value) external returns (bool) {
-        require(to != address(0), "Invalid recipient address");
-        require(value <= balances[msg.sender], "Insufficient balance");
-
-        balances[msg.sender] -= value;
-        balances[to] += value;
-
-        return true;
     }
 }
