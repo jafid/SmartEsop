@@ -4,7 +4,8 @@
 
 ## Contract Architecture
 
-The ESOP contract is implemented in Solidity, a statically typed programming language for writing smart contracts on the Ethereum blockchain. The contract follows the ERC20 token standard for token transfers and implements additional functionality specific to the management of employee stock options.
+The Employee Stock Option Plan (ESOP) smart contract utilizes the ERC721 standard to enable precise and unique management of employee stock options, 
+granting, vesting, and exercising them as non-fungible tokens on the Ethereum blockchain.
 
 The contract consists of the following components:
 
@@ -13,7 +14,7 @@ The contract consists of the following components:
   
 ### State Variables
 + **`company:`** Address of the company that owns the ESOP contract. This address is set during contract deployment and remains immutable.
-+ **`token:`** ERC20 token contract used for granting options.
++ **`token:`** ERC721 token contract used for granting options.
 + **`totalOptions:`** Total number of available stock options.
 + **`totalVested:`** Total number of vested stock options.
 + **`employeeList:`** List of addresses of employees who have been granted stock options.
@@ -52,7 +53,7 @@ transferTokens: Transfers tokens from the ESOP contract to a recipient.
 ## Usage Instructions
 
 ### Deployment:
-1. Deploy the ESOP contract by providing the address of the ERC20 token contract as a constructor parameter.
+1. Deploy the ESOP contract by providing the address of the ERC721 token contract as a constructor parameter.
 The totalOptions variable can be adjusted according to the total number of stock options available for granting.
 The address deploying the contract will be set as the company address.
 
@@ -97,18 +98,20 @@ The function will verify the recipient address and the availability of token bal
 + The vestOptions function vests options for eligible employees in a single transaction, minimizing gas costs by updating the vested option balances and emitting events only for employees with vested options.
 + The transferTokens function transfers tokens from the ESOP contract to a recipient, ensuring that the contract has sufficient token balance before performing the transfer. This prevents failed transfers and wasted gas.
 
-## ERC20 Compliance
-+ The ESOP contract interacts with an ERC20 token contract, which is a separate contract that implements the ERC20 token standard. The token contract is required to have the following functions:
+## ERC721 Compliance:
 
-+ **`totalSupply:`** Returns the total supply of tokens.
-+ **`balanceOf:`** Returns the token balance of a given account.
-+ **`transfer:`** Transfers tokens from the caller's account to a recipient's account.
++ The ESOP contract extends the ERC721 token contract, ensuring compliance with the ERC721 standard for non-fungible tokens.
++ Each employee is granted a unique ERC721 token representing their stock options.
++ The contract uses the safeTransferFrom function from the ERC721 contract to transfer tokens between addresses, ensuring secure and valid transfers.
++ The contract emits a Transfer event after a successful token transfer, providing details such as the sender's address, recipient's address, and the transferred token's unique identifier (tokenId).
 
-- The ESOP contract interacts with the token contract to check the available token balance, transfer tokens to employees upon exercising options, and transfer tokens to recipients using the transferTokens function.
 
-## ERC 20 - contracts/EmployeeStockOptionPlan Code
+
+## ERC 721 - contracts/EmployeeStockOptionPlan Code
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 /**
  * @title Employee Stock Option Plan Contract
@@ -118,7 +121,7 @@ pragma solidity ^0.8.0;
  *      The contract ensures that options are granted and exercised within the specified rules and tracks
  *      the total number of available options and vested options. It also prevents reentrant calls.
  */
-contract EmployeeStockOptionPlan {
+contract EmployeeStockOptionPlan is ERC721 {
     struct GrantOption {
         uint256 options;         // Total number of options granted
         uint256 vestingPeriod;   // Duration of the vesting period (in blocks)
@@ -128,22 +131,21 @@ contract EmployeeStockOptionPlan {
         bool exercised;          // Flag indicating whether options have been exercised
     }
 
-    address public company;           // Address of the company
-    ERC20 public token;               // Token contract used for granting options
+    address public immutable company;           // Address of the company
     uint256 public totalOptions;      // Total number of available options
     uint256 public totalVested;       // Total number of vested options
+    uint256 private totalTokens;      // Total number of ERC721 tokens minted
     address[] public employeeList;    // List of employees
     mapping(address => GrantOption) public employeeGrants; // Mapping of employee grants
 
     event OptionsGranted(address indexed employee, uint256 options);
     event OptionsVested(address indexed employee, uint256 options, uint256 vestedOptions);
     event OptionsExercised(address indexed employee, uint256 options);
-    event TokensTransferred(address indexed from, address indexed to, uint256 value);
 
-    constructor(address _tokenAddress) {
-        token = ERC20(_tokenAddress);
+    constructor() ERC721("EmployeeStockOptions", "ESO") {
         totalOptions = 1000;
         company = msg.sender;
+        totalTokens = 0;
     }
 
     /**
@@ -167,6 +169,10 @@ contract EmployeeStockOptionPlan {
         });
 
         employeeList.push(employee);
+
+        uint256 tokenId = totalTokens + 1;
+        totalTokens = tokenId;
+        _safeMint(employee, tokenId);
 
         emit OptionsGranted(employee, options);
     }
@@ -261,23 +267,6 @@ contract EmployeeStockOptionPlan {
         totalVested += totalVestedOptions;
     }
 
-    /**
-     * @dev Transfer tokens from the contract to a recipient.
-     * @param to The address of the recipient.
-     * @param value The amount of tokens to transfer.
-     */
-    function transferTokens(address to, uint256 value) external onlyCompany {
-        require(to != address(0), "Invalid recipient address");
-        require(value <= token.balanceOf(address(this)), "Insufficient token balance");
-
-        token.transfer(to, value);
-
-        emit TokensTransferred(address(this), to, value);
-    }
-
-    /**
-     * @dev Modifier: Only the company can call the function.
-     */
     modifier onlyCompany() {
         require(msg.sender == company, "Only the company can call this function");
         _;
@@ -285,37 +274,10 @@ contract EmployeeStockOptionPlan {
 
     bool private inTransaction;
 
-    /**
-     * @dev Modifier: Prevent reentrant calls.
-     */
     modifier nonReentrant() {
         require(!inTransaction, "Reentrant call");
         inTransaction = true;
         _;
         inTransaction = false;
-    }
-}
-
-// ERC20 token contract interface
-contract ERC20 {
-    mapping(address => uint256) balances;
-    uint256 totalSupply_;
-
-    function totalSupply() external view returns (uint256) {
-        return totalSupply_;
-    }
-
-    function balanceOf(address account) external view returns (uint256) {
-        return balances[account];
-    }
-
-    function transfer(address to, uint256 value) external returns (bool) {
-        require(to != address(0), "Invalid recipient address");
-        require(value <= balances[msg.sender], "Insufficient balance");
-
-        balances[msg.sender] -= value;
-        balances[to] += value;
-
-        return true;
     }
 }
